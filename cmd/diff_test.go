@@ -14,14 +14,6 @@ import (
 func Test_cmdDiff(t *testing.T) {
 	t.Parallel()
 
-	mkFiles := func(t *testing.T, dir string, files map[string]string) {
-		t.Helper()
-		for rel, content := range files {
-			path := filepath.Join(dir, rel)
-			require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-			require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
-		}
-	}
 	readFiles := func(t *testing.T, dir string) map[string]string {
 		t.Helper()
 		got := map[string]string{}
@@ -47,61 +39,39 @@ func Test_cmdDiff(t *testing.T) {
 	}
 
 	tests := []struct {
-		name   string
-		setup  func(t *testing.T) (repo, home string)
-		hasErr bool
+		name      string
+		repoFiles map[string]string // nil means the repo directory does not exist
+		homeFiles map[string]string
+		hasErr    bool
 	}{
 		{
-			name: "succeeds when nothing changed",
-			setup: func(t *testing.T) (string, string) {
-				repo, home := t.TempDir(), t.TempDir()
-				mkFiles(t, repo, map[string]string{".zshrc": "same"})
-				mkFiles(t, home, map[string]string{".zshrc": "same"})
-				return repo, home
-			},
+			name:      "succeeds when nothing changed",
+			repoFiles: map[string]string{".zshrc": "same"},
+			homeFiles: map[string]string{".zshrc": "same"},
 		},
 		{
-			name: "succeeds when file differs",
-			setup: func(t *testing.T) (string, string) {
-				repo, home := t.TempDir(), t.TempDir()
-				mkFiles(t, repo, map[string]string{".zshrc": "new"})
-				mkFiles(t, home, map[string]string{".zshrc": "old"})
-				return repo, home
-			},
+			name:      "succeeds when file differs",
+			repoFiles: map[string]string{".zshrc": "new"},
+			homeFiles: map[string]string{".zshrc": "old"},
 		},
 		{
-			name: "succeeds when file is missing in home",
-			setup: func(t *testing.T) (string, string) {
-				repo, home := t.TempDir(), t.TempDir()
-				mkFiles(t, repo, map[string]string{".config/nvim/init.lua": "lua"})
-				return repo, home
-			},
+			name:      "succeeds when file is missing in home",
+			repoFiles: map[string]string{".config/nvim/init.lua": "lua"},
 		},
 		{
-			name: "ignores files only in home",
-			setup: func(t *testing.T) (string, string) {
-				repo, home := t.TempDir(), t.TempDir()
-				mkFiles(t, repo, map[string]string{".zshrc": "same"})
-				mkFiles(t, home, map[string]string{".zshrc": "same", ".bashrc": "bash"})
-				return repo, home
-			},
+			name:      "ignores files only in home",
+			repoFiles: map[string]string{".zshrc": "same"},
+			homeFiles: map[string]string{".zshrc": "same", ".bashrc": "bash"},
 		},
 		{
-			name: "fails when repo does not exist",
-			setup: func(t *testing.T) (string, string) {
-				return filepath.Join(t.TempDir(), "missing"), t.TempDir()
-			},
+			name:   "fails when repo does not exist",
 			hasErr: true,
 		},
 		{
-			name: "fails when home has directory with same name",
-			setup: func(t *testing.T) (string, string) {
-				repo, home := t.TempDir(), t.TempDir()
-				mkFiles(t, repo, map[string]string{".config": "x"})
-				mkFiles(t, home, map[string]string{".config/nvim/init.lua": "lua"})
-				return repo, home
-			},
-			hasErr: true,
+			name:      "fails when home has directory with same name",
+			repoFiles: map[string]string{".config": "x"},
+			homeFiles: map[string]string{".config/nvim/init.lua": "lua"},
+			hasErr:    true,
 		},
 	}
 
@@ -109,7 +79,10 @@ func Test_cmdDiff(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			repo, home := test.setup(t)
+			repo := filepath.Join(t.TempDir(), "repo")
+			home := t.TempDir()
+			writeFiles(t, repo, test.repoFiles)
+			writeFiles(t, home, test.homeFiles)
 			repoBefore, homeBefore := readFiles(t, repo), readFiles(t, home)
 
 			err := cmdDiff(repo, home)

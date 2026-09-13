@@ -14,13 +14,6 @@ func Test_cmdAdd(t *testing.T) {
 	const wantContent = "hello, world\n"
 	const wantPerm = os.FileMode(0o640)
 
-	writeFile := func(t *testing.T, path string) {
-		t.Helper()
-		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-		require.NoError(t, os.WriteFile(path, []byte(wantContent), wantPerm))
-		require.NoError(t, os.Chmod(path, wantPerm))
-	}
-
 	tests := []struct {
 		name     string
 		setup    func(t *testing.T, home, repo string) []string
@@ -30,7 +23,7 @@ func Test_cmdAdd(t *testing.T) {
 		{
 			name: "adds a file directly under home",
 			setup: func(t *testing.T, home, repo string) []string {
-				writeFile(t, filepath.Join(home, ".zshrc"))
+				writeFile(t, filepath.Join(home, ".zshrc"), wantContent, wantPerm)
 				return []string{filepath.Join(home, ".zshrc")}
 			},
 			wantRels: []string{".zshrc"},
@@ -38,7 +31,7 @@ func Test_cmdAdd(t *testing.T) {
 		{
 			name: "adds a nested file preserving relative path",
 			setup: func(t *testing.T, home, repo string) []string {
-				writeFile(t, filepath.Join(home, ".config", "nvim", "init.lua"))
+				writeFile(t, filepath.Join(home, ".config", "nvim", "init.lua"), wantContent, wantPerm)
 				return []string{filepath.Join(home, ".config", "nvim", "init.lua")}
 			},
 			wantRels: []string{filepath.Join(".config", "nvim", "init.lua")},
@@ -46,8 +39,8 @@ func Test_cmdAdd(t *testing.T) {
 		{
 			name: "adds multiple files",
 			setup: func(t *testing.T, home, repo string) []string {
-				writeFile(t, filepath.Join(home, ".zshrc"))
-				writeFile(t, filepath.Join(home, ".gitconfig"))
+				writeFile(t, filepath.Join(home, ".zshrc"), wantContent, wantPerm)
+				writeFile(t, filepath.Join(home, ".gitconfig"), wantContent, wantPerm)
 				return []string{
 					filepath.Join(home, ".zshrc"),
 					filepath.Join(home, ".gitconfig"),
@@ -58,9 +51,8 @@ func Test_cmdAdd(t *testing.T) {
 		{
 			name: "overwrites existing file in repo",
 			setup: func(t *testing.T, home, repo string) []string {
-				writeFile(t, filepath.Join(home, ".zshrc"))
-				require.NoError(t, os.MkdirAll(repo, 0o755))
-				require.NoError(t, os.WriteFile(filepath.Join(repo, ".zshrc"), []byte("old"), 0o600))
+				writeFile(t, filepath.Join(home, ".zshrc"), wantContent, wantPerm)
+				writeFile(t, filepath.Join(repo, ".zshrc"), "old", 0o600)
 				return []string{filepath.Join(home, ".zshrc")}
 			},
 			wantRels: []string{".zshrc"},
@@ -76,7 +68,7 @@ func Test_cmdAdd(t *testing.T) {
 			name: "fails when path is outside home",
 			setup: func(t *testing.T, home, repo string) []string {
 				outside := filepath.Join(t.TempDir(), "outside.txt")
-				writeFile(t, outside)
+				writeFile(t, outside, wantContent, wantPerm)
 				return []string{outside}
 			},
 			hasErr: true,
@@ -107,7 +99,7 @@ func Test_cmdAdd(t *testing.T) {
 		{
 			name: "leaves earlier files copied when a later path fails",
 			setup: func(t *testing.T, home, repo string) []string {
-				writeFile(t, filepath.Join(home, ".zshrc"))
+				writeFile(t, filepath.Join(home, ".zshrc"), wantContent, wantPerm)
 				return []string{
 					filepath.Join(home, ".zshrc"),
 					filepath.Join(home, "missing.txt"),
@@ -135,15 +127,7 @@ func Test_cmdAdd(t *testing.T) {
 			}
 
 			for _, rel := range test.wantRels {
-				dst := filepath.Join(repo, rel)
-
-				got, err := os.ReadFile(dst)
-				require.NoError(t, err)
-				assert.Equal(t, wantContent, string(got))
-
-				info, err := os.Stat(dst)
-				require.NoError(t, err)
-				assert.Equal(t, wantPerm, info.Mode().Perm())
+				assertFile(t, filepath.Join(repo, rel), wantContent, wantPerm)
 			}
 		})
 	}
