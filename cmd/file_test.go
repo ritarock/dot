@@ -171,3 +171,212 @@ func Test_copyFile(t *testing.T) {
 		})
 	}
 }
+
+func Test_managedFiles(t *testing.T) {
+	t.Parallel()
+
+	mkFiles := func(t *testing.T, repo string, rels ...string) {
+		t.Helper()
+		for _, rel := range rels {
+			path := filepath.Join(repo, filepath.FromSlash(rel))
+			require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+			require.NoError(t, os.WriteFile(path, []byte("x"), 0o644))
+		}
+	}
+
+	tests := []struct {
+		name   string
+		setup  func(t *testing.T) string
+		want   []string
+		hasErr bool
+	}{
+		{
+			name: "returns files sorted",
+			setup: func(t *testing.T) string {
+				repo := t.TempDir()
+				mkFiles(t, repo, ".zshrc", ".gitconfig", ".vimrc")
+				return repo
+			},
+			want: []string{".gitconfig", ".vimrc", ".zshrc"},
+		},
+		{
+			name: "returns nested files with relative paths",
+			setup: func(t *testing.T) string {
+				repo := t.TempDir()
+				mkFiles(t, repo, ".config/nvim/init.lua", ".config/git/ignore", ".zshrc")
+				return repo
+			},
+			want: []string{".config/git/ignore", ".config/nvim/init.lua", ".zshrc"},
+		},
+		{
+			name: "skips .git directory",
+			setup: func(t *testing.T) string {
+				repo := t.TempDir()
+				mkFiles(t, repo, ".zshrc", ".git/config", ".git/objects/ab/cdef")
+				return repo
+			},
+			want: []string{".zshrc"},
+		},
+		{
+			name: "skips nested .git directory",
+			setup: func(t *testing.T) string {
+				repo := t.TempDir()
+				mkFiles(t, repo, ".config/sub/.git/config", ".config/sub/file.txt")
+				return repo
+			},
+			want: []string{".config/sub/file.txt"},
+		},
+		{
+			name: "does not skip .git when it is a file",
+			setup: func(t *testing.T) string {
+				repo := t.TempDir()
+				mkFiles(t, repo, ".git", ".zshrc")
+				return repo
+			},
+			want: []string{".git", ".zshrc"},
+		},
+		{
+			name: "returns nil when repo has only directories",
+			setup: func(t *testing.T) string {
+				repo := t.TempDir()
+				require.NoError(t, os.MkdirAll(filepath.Join(repo, ".config", "nvim"), 0o755))
+				return repo
+			},
+			want: nil,
+		},
+		{
+			name: "returns nil when repo is empty",
+			setup: func(t *testing.T) string {
+				return t.TempDir()
+			},
+			want: nil,
+		},
+		{
+			name: "fails when repo does not exist",
+			setup: func(t *testing.T) string {
+				return filepath.Join(t.TempDir(), "missing")
+			},
+			hasErr: true,
+		},
+		{
+			name: "returns dot when repo is a regular file",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				path := filepath.Join(dir, "notadir")
+				require.NoError(t, os.WriteFile(path, []byte("x"), 0o644))
+				return path
+			},
+			want: []string{"."},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			repo := test.setup(t)
+
+			got, err := managedFiles(repo)
+
+			if test.hasErr {
+				assert.Error(t, err)
+				assert.Nil(t, got)
+				return
+			}
+			require.NoError(t, err)
+
+			var gotSlash []string
+			for _, p := range got {
+				gotSlash = append(gotSlash, filepath.ToSlash(p))
+			}
+			assert.Equal(t, test.want, gotSlash)
+		})
+	}
+}
+
+func Test_filesDiffer(t *testing.T) {
+	t.Parallel()
+
+	mkFile := func(t *testing.T, path, content string) {
+		t.Helper()
+		require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+	}
+
+	tests := []struct {
+		name   string
+		setup  func(t *testing.T) (a, b string)
+		want   bool
+		hasErr bool
+	}{
+		{
+			name: "returns false when contents are same",
+			setup: func(t *testing.T) (string, string) {
+				dir := t.TempDir()
+				a, b := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+				mkFile(t, a, "same")
+				mkFile(t, b, "same")
+				return a, b
+			},
+			want: false,
+		},
+		{
+			name: "returns true when contents differ",
+			setup: func(t *testing.T) (string, string) {
+				dir := t.TempDir()
+				a, b := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+				mkFile(t, a, "new")
+				mkFile(t, b, "old")
+				return a, b
+			},
+			want: true,
+		},
+		{
+			name: "returns true when b does not exist",
+			setup: func(t *testing.T) (string, string) {
+				dir := t.TempDir()
+				a := filepath.Join(dir, "a")
+				mkFile(t, a, "x")
+				return a, filepath.Join(dir, "missing")
+			},
+			want: true,
+		},
+		{
+			name: "fails when a does not exist",
+			setup: func(t *testing.T) (string, string) {
+				dir := t.TempDir()
+				b := filepath.Join(dir, "b")
+				mkFile(t, b, "x")
+				return filepath.Join(dir, "missing"), b
+			},
+			hasErr: true,
+		},
+		{
+			name: "fails when b is a directory",
+			setup: func(t *testing.T) (string, string) {
+				dir := t.TempDir()
+				a := filepath.Join(dir, "a")
+				mkFile(t, a, "x")
+				return a, t.TempDir()
+			},
+			hasErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			a, b := test.setup(t)
+
+			got, err := filesDiffer(a, b)
+
+			if test.hasErr {
+				assert.Error(t, err)
+				assert.False(t, got)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, test.want, got)
+		})
+	}
+}
