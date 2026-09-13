@@ -1,9 +1,6 @@
 package cmd
 
 import (
-	"errors"
-	"io/fs"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -13,30 +10,6 @@ import (
 
 func Test_cmdDiff(t *testing.T) {
 	t.Parallel()
-
-	readFiles := func(t *testing.T, dir string) map[string]string {
-		t.Helper()
-		got := map[string]string{}
-		err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
-				return err
-			}
-			rel, err := filepath.Rel(dir, path)
-			if err != nil {
-				return err
-			}
-			data, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			got[rel] = string(data)
-			return nil
-		})
-		if !errors.Is(err, fs.ErrNotExist) {
-			require.NoError(t, err)
-		}
-		return got
-	}
 
 	tests := []struct {
 		name      string
