@@ -14,7 +14,8 @@ var rootCmd = &cobra.Command{
 
 The repository directory (default ~/dotfiles, override with $DOT_DIR)
 mirrors the structure of $HOME. There is no config file.`,
-	SilenceUsage: true,
+	SilenceUsage:      true,
+	CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
 }
 
 func Execute() {
