@@ -11,20 +11,6 @@ import (
 	"slices"
 )
 
-func dirs() (repo, home string, err error) {
-	home, err = os.UserHomeDir()
-	if err != nil {
-		return "", "", err
-	}
-
-	repo = os.Getenv("DOT_DIR")
-	if repo == "" {
-		repo = filepath.Join(home, "dotfiles")
-	}
-
-	return repo, home, nil
-}
-
 func copyFile(src, dst string) error {
 	info, err := os.Stat(src)
 	if err != nil {

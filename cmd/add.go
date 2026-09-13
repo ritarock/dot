@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -33,7 +32,7 @@ func cmdAdd(repo, home string, paths []string) error {
 			return err
 		}
 		rel, err := filepath.Rel(home, abs)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		if err != nil || !filepath.IsLocal(rel) {
 			return fmt.Errorf("%s is not under home directory %s", abs, home)
 		}
 		info, err := os.Stat(abs)

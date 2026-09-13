@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 )
@@ -25,27 +24,12 @@ func init() {
 }
 
 func cmdDiff(repo, home string) error {
-	files, err := managedFiles(repo)
+	changed, err := changedFiles(repo, home, apply)
 	if err != nil {
 		return err
 	}
-
-	changed := false
-	for _, rel := range files {
-		differ, err := filesDiffer(filepath.Join(repo, rel), filepath.Join(home, rel))
-		if err != nil {
-			return err
-		}
-		if !differ {
-			continue
-		}
-		changed = true
-		if err := showDiff(filepath.Join(home, rel), filepath.Join(repo, rel)); err != nil {
-			return err
-		}
-	}
-	if !changed {
-		fmt.Println("no changed")
+	if len(changed) == 0 {
+		fmt.Println("no changes")
 	}
 
 	return nil

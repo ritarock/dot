@@ -18,42 +18,56 @@ const (
 	update
 )
 
-func sync(repo, home string, yes bool, stdin io.Reader, act action) error {
+// roots returns the copy source and destination roots for act.
+func (act action) roots(repo, home string) (src, dst string) {
+	if act == update {
+		return home, repo
+	}
+	return repo, home
+}
+
+// changedFiles shows the diff of each managed file that act would change
+// and returns their relative paths.
+func changedFiles(repo, home string, act action) ([]string, error) {
 	files, err := managedFiles(repo)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	src, dst := act.roots(repo, home)
 	var changed []string
 	for _, rel := range files {
-		repoPath := filepath.Join(repo, rel)
-		homePath := filepath.Join(home, rel)
+		srcPath, dstPath := filepath.Join(src, rel), filepath.Join(dst, rel)
 		if act == update {
-			if _, err := os.Stat(homePath); errors.Is(err, fs.ErrNotExist) {
-				fmt.Println("skip (missing in home): ", rel)
+			if _, err := os.Stat(srcPath); errors.Is(err, fs.ErrNotExist) {
+				fmt.Println("skip (missing in home):", rel)
 				continue
 			}
 		}
-		differ, err := filesDiffer(repoPath, homePath)
+		differ, err := filesDiffer(srcPath, dstPath)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !differ {
 			continue
 		}
+		if err := showDiff(dstPath, srcPath); err != nil {
+			return nil, err
+		}
 		changed = append(changed, rel)
-		if act == apply {
-			err = showDiff(homePath, repoPath)
-		} else {
-			err = showDiff(repoPath, homePath)
-		}
-		if err != nil {
-			return err
-		}
+	}
+
+	return changed, nil
+}
+
+func sync(repo, home string, yes bool, stdin io.Reader, act action) error {
+	changed, err := changedFiles(repo, home, act)
+	if err != nil {
+		return err
 	}
 
 	if len(changed) == 0 {
-		fmt.Println("already updated")
+		fmt.Println("already up to date")
 		return nil
 	}
 
@@ -62,12 +76,9 @@ func sync(repo, home string, yes bool, stdin io.Reader, act action) error {
 		return nil
 	}
 
+	src, dst := act.roots(repo, home)
 	for _, rel := range changed {
-		src, dst := filepath.Join(repo, rel), filepath.Join(home, rel)
-		if act == update {
-			src, dst = dst, src
-		}
-		if err := copyFile(src, dst); err != nil {
+		if err := copyFile(filepath.Join(src, rel), filepath.Join(dst, rel)); err != nil {
 			return err
 		}
 		fmt.Println("copied", rel)
@@ -77,7 +88,7 @@ func sync(repo, home string, yes bool, stdin io.Reader, act action) error {
 }
 
 func confirm(prompt string, stdin io.Reader) bool {
-	fmt.Println(prompt)
+	fmt.Print(prompt)
 	line, err := bufio.NewReader(stdin).ReadString('\n')
 	if err != nil && line == "" {
 		return false

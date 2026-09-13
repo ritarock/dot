@@ -159,6 +159,67 @@ func Test_sync(t *testing.T) {
 	}
 }
 
+func Test_changedFiles(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		act       action
+		repoFiles map[string]string // nil means the repo directory does not exist
+		homeFiles map[string]string
+		want      []string
+		hasErr    bool
+	}{
+		{
+			name:      "apply returns changed and missing-in-home files",
+			act:       apply,
+			repoFiles: map[string]string{".zshrc": "new", ".vimrc": "same", ".gitconfig": "git"},
+			homeFiles: map[string]string{".zshrc": "old", ".vimrc": "same"},
+			want:      []string{".gitconfig", ".zshrc"},
+		},
+		{
+			name:      "apply returns nil when nothing changed",
+			act:       apply,
+			repoFiles: map[string]string{".zshrc": "same"},
+			homeFiles: map[string]string{".zshrc": "same"},
+			want:      nil,
+		},
+		{
+			name:      "update skips files missing in home",
+			act:       update,
+			repoFiles: map[string]string{".zshrc": "x", ".vimrc": "old"},
+			homeFiles: map[string]string{".vimrc": "new"},
+			want:      []string{".vimrc"},
+		},
+		{
+			name:   "fails when repo does not exist",
+			act:    apply,
+			hasErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			repo := filepath.Join(t.TempDir(), "repo")
+			home := t.TempDir()
+			writeFiles(t, repo, test.repoFiles)
+			writeFiles(t, home, test.homeFiles)
+
+			got, err := changedFiles(repo, home, test.act)
+
+			if test.hasErr {
+				assert.Error(t, err)
+				assert.Nil(t, got)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, test.want, got)
+		})
+	}
+}
+
 func Test_confirm(t *testing.T) {
 	t.Parallel()
 

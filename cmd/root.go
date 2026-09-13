@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 )
@@ -21,4 +22,18 @@ func Execute() {
 	if err != nil {
 		os.Exit(1)
 	}
+}
+
+func dirs() (repo, home string, err error) {
+	home, err = os.UserHomeDir()
+	if err != nil {
+		return "", "", err
+	}
+
+	repo = os.Getenv("DOT_DIR")
+	if repo == "" {
+		repo = filepath.Join(home, "dotfiles")
+	}
+
+	return repo, home, nil
 }
