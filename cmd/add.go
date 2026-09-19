@@ -35,6 +35,10 @@ func cmdAdd(repo, home string, paths []string) error {
 		if err != nil || !filepath.IsLocal(rel) {
 			return fmt.Errorf("%s is not under home directory %s", abs, home)
 		}
+		repoRel := encodeRel(rel)
+		if decodeRel(repoRel) != rel {
+			return fmt.Errorf("%s cannot be added: path elements starting with %q are reserved", abs, dotPrefix)
+		}
 		info, err := os.Stat(abs)
 		if err != nil {
 			return err
@@ -42,7 +46,7 @@ func cmdAdd(repo, home string, paths []string) error {
 		if !info.Mode().IsRegular() {
 			return fmt.Errorf("%s is not a regular file", abs)
 		}
-		if err := copyFile(abs, filepath.Join(repo, rel)); err != nil {
+		if err := copyFile(abs, filepath.Join(repo, repoRel)); err != nil {
 			return err
 		}
 		fmt.Println("added", rel)

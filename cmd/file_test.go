@@ -105,47 +105,56 @@ func Test_managedFiles(t *testing.T) {
 		{
 			name: "returns files sorted",
 			setup: func(t *testing.T, dir string) string {
-				writeFiles(t, dir, map[string]string{".zshrc": "x", ".gitconfig": "x", ".vimrc": "x"})
+				writeFiles(t, dir, map[string]string{"dot_zshrc": "x", "dot_gitconfig": "x", "dot_vimrc": "x"})
 				return dir
 			},
-			want: []string{".gitconfig", ".vimrc", ".zshrc"},
+			want: []string{"dot_gitconfig", "dot_vimrc", "dot_zshrc"},
 		},
 		{
 			name: "returns nested files with relative paths",
 			setup: func(t *testing.T, dir string) string {
-				writeFiles(t, dir, map[string]string{".config/nvim/init.lua": "x", ".config/git/ignore": "x", ".zshrc": "x"})
+				writeFiles(t, dir, map[string]string{"dot_config/nvim/init.lua": "x", "dot_config/git/ignore": "x", "dot_zshrc": "x"})
 				return dir
 			},
-			want: []string{".config/git/ignore", ".config/nvim/init.lua", ".zshrc"},
+			want: []string{"dot_config/git/ignore", "dot_config/nvim/init.lua", "dot_zshrc"},
 		},
 		{
-			name: "skips .git directory",
+			name: "skips dot-prefixed directories",
 			setup: func(t *testing.T, dir string) string {
-				writeFiles(t, dir, map[string]string{".zshrc": "x", ".git/config": "x", ".git/objects/ab/cdef": "x"})
+				writeFiles(t, dir, map[string]string{"dot_zshrc": "x", ".git/config": "x", ".git/objects/ab/cdef": "x", ".github/workflows/ci.yml": "x"})
 				return dir
 			},
-			want: []string{".zshrc"},
+			want: []string{"dot_zshrc"},
 		},
 		{
-			name: "skips nested .git directory",
+			name: "skips nested dot-prefixed directory",
 			setup: func(t *testing.T, dir string) string {
-				writeFiles(t, dir, map[string]string{".config/sub/.git/config": "x", ".config/sub/file.txt": "x"})
+				writeFiles(t, dir, map[string]string{"dot_config/sub/.git/config": "x", "dot_config/sub/file.txt": "x"})
 				return dir
 			},
-			want: []string{".config/sub/file.txt"},
+			want: []string{"dot_config/sub/file.txt"},
 		},
 		{
-			name: "does not skip .git when it is a file",
+			name: "skips dot-prefixed files",
 			setup: func(t *testing.T, dir string) string {
-				writeFiles(t, dir, map[string]string{".git": "x", ".zshrc": "x"})
+				writeFiles(t, dir, map[string]string{".git": "x", ".gitignore": "x", "dot_zshrc": "x"})
 				return dir
 			},
-			want: []string{".git", ".zshrc"},
+			want: []string{"dot_zshrc"},
+		},
+		{
+			name: "does not skip repo root starting with dot",
+			setup: func(t *testing.T, dir string) string {
+				repo := filepath.Join(dir, ".dotfiles")
+				writeFiles(t, repo, map[string]string{"dot_zshrc": "x"})
+				return repo
+			},
+			want: []string{"dot_zshrc"},
 		},
 		{
 			name: "returns nil when repo has only directories",
 			setup: func(t *testing.T, dir string) string {
-				require.NoError(t, os.MkdirAll(filepath.Join(dir, ".config", "nvim"), 0o755))
+				require.NoError(t, os.MkdirAll(filepath.Join(dir, "dot_config", "nvim"), 0o755))
 				return dir
 			},
 			want: nil,
@@ -272,6 +281,89 @@ func Test_filesDiffer(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.Equal(t, test.want, got)
+		})
+	}
+}
+
+func Test_encodeRel(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		rel  string
+		want string
+	}{
+		{name: "returns empty for empty path", rel: "", want: ""},
+		{name: "leaves non-dot file unchanged", rel: "zshrc", want: "zshrc"},
+		{name: "encodes dot file", rel: ".zshrc", want: "dot_zshrc"},
+		{name: "encodes only leading dot directory", rel: ".config/nvim/init.lua", want: "dot_config/nvim/init.lua"},
+		{name: "encodes every dot element", rel: ".config/.hidden/.x", want: "dot_config/dot_hidden/dot_x"},
+		{name: "ignores dot in the middle of element", rel: "a.b/c.txt", want: "a.b/c.txt"},
+		{name: "leaves dot unchanged", rel: ".", want: "."},
+		{name: "leaves dot dot unchanged", rel: "..", want: ".."},
+		{name: "keeps dot dot and encodes following element", rel: "../.zshrc", want: "../dot_zshrc"},
+		{name: "strips only one leading dot", rel: "..foo", want: "dot_.foo"},
+		{name: "leaves element already prefixed with dot_ unchanged", rel: "dot_foo", want: "dot_foo"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := encodeRel(filepath.FromSlash(test.rel))
+
+			assert.Equal(t, filepath.FromSlash(test.want), got)
+		})
+	}
+}
+
+func Test_decodeRel(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		rel  string
+		want string
+	}{
+		{name: "returns empty for empty path", rel: "", want: ""},
+		{name: "leaves non-prefixed file unchanged", rel: "zshrc", want: "zshrc"},
+		{name: "decodes prefixed file", rel: "dot_zshrc", want: ".zshrc"},
+		{name: "decodes only prefixed directory", rel: "dot_config/nvim/init.lua", want: ".config/nvim/init.lua"},
+		{name: "decodes every prefixed element", rel: "dot_config/dot_hidden/dot_x", want: ".config/.hidden/.x"},
+		{name: "ignores prefix not at element start", rel: "mydot_file", want: "mydot_file"},
+		{name: "decodes bare prefix to dot", rel: "dot_", want: "."},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := decodeRel(filepath.FromSlash(test.rel))
+
+			assert.Equal(t, filepath.FromSlash(test.want), got)
+		})
+	}
+}
+
+func Test_encodeDecodeRel_roundTrip(t *testing.T) {
+	t.Parallel()
+
+	tests := []string{
+		".zshrc",
+		".config/nvim/init.lua",
+		".config/.hidden/.x",
+		"a.b/c.txt",
+		"../.zshrc",
+		"..foo",
+	}
+
+	for _, rel := range tests {
+		t.Run(rel, func(t *testing.T) {
+			t.Parallel()
+
+			rel := filepath.FromSlash(rel)
+
+			assert.Equal(t, rel, decodeRel(encodeRel(rel)))
 		})
 	}
 }

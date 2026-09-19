@@ -9,7 +9,32 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 )
+
+const dotPrefix = "dot_"
+
+func encodeRel(rel string) string {
+	sep := string(filepath.Separator)
+	elems := strings.Split(rel, sep)
+	for i, e := range elems {
+		if strings.HasPrefix(e, ".") && e != "." && e != ".." {
+			elems[i] = dotPrefix + e[len("."):]
+		}
+	}
+	return strings.Join(elems, sep)
+}
+
+func decodeRel(rel string) string {
+	sep := string(filepath.Separator)
+	elems := strings.Split(rel, sep)
+	for i, e := range elems {
+		if strings.HasPrefix(e, dotPrefix) {
+			elems[i] = "." + e[len(dotPrefix):]
+		}
+	}
+	return strings.Join(elems, sep)
+}
 
 func copyFile(src, dst string) error {
 	info, err := os.Stat(src)
@@ -36,10 +61,13 @@ func managedFiles(repo string) ([]string, error) {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() {
-			if d.Name() == ".git" {
+		if path != repo && strings.HasPrefix(d.Name(), ".") {
+			if d.IsDir() {
 				return filepath.SkipDir
 			}
+			return nil
+		}
+		if d.IsDir() {
 			return nil
 		}
 		rel, err := filepath.Rel(repo, path)

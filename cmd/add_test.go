@@ -26,7 +26,7 @@ func Test_cmdAdd(t *testing.T) {
 				writeFile(t, filepath.Join(home, ".zshrc"), wantContent, wantPerm)
 				return []string{filepath.Join(home, ".zshrc")}
 			},
-			wantRels: []string{".zshrc"},
+			wantRels: []string{"dot_zshrc"},
 		},
 		{
 			name: "adds a nested file preserving relative path",
@@ -34,7 +34,7 @@ func Test_cmdAdd(t *testing.T) {
 				writeFile(t, filepath.Join(home, ".config", "nvim", "init.lua"), wantContent, wantPerm)
 				return []string{filepath.Join(home, ".config", "nvim", "init.lua")}
 			},
-			wantRels: []string{filepath.Join(".config", "nvim", "init.lua")},
+			wantRels: []string{filepath.Join("dot_config", "nvim", "init.lua")},
 		},
 		{
 			name: "adds multiple files",
@@ -46,16 +46,16 @@ func Test_cmdAdd(t *testing.T) {
 					filepath.Join(home, ".gitconfig"),
 				}
 			},
-			wantRels: []string{".zshrc", ".gitconfig"},
+			wantRels: []string{"dot_zshrc", "dot_gitconfig"},
 		},
 		{
 			name: "overwrites existing file in repo",
 			setup: func(t *testing.T, home, repo string) []string {
 				writeFile(t, filepath.Join(home, ".zshrc"), wantContent, wantPerm)
-				writeFile(t, filepath.Join(repo, ".zshrc"), "old", 0o600)
+				writeFile(t, filepath.Join(repo, "dot_zshrc"), "old", 0o600)
 				return []string{filepath.Join(home, ".zshrc")}
 			},
-			wantRels: []string{".zshrc"},
+			wantRels: []string{"dot_zshrc"},
 		},
 		{
 			name: "does nothing when paths is empty",
@@ -88,6 +88,14 @@ func Test_cmdAdd(t *testing.T) {
 			hasErr: true,
 		},
 		{
+			name: "fails when path has element starting with dot_",
+			setup: func(t *testing.T, home, repo string) []string {
+				writeFile(t, filepath.Join(home, "dot_foo"), wantContent, wantPerm)
+				return []string{filepath.Join(home, "dot_foo")}
+			},
+			hasErr: true,
+		},
+		{
 			name: "fails when path is a directory",
 			setup: func(t *testing.T, home, repo string) []string {
 				dir := filepath.Join(home, ".config")
@@ -105,7 +113,7 @@ func Test_cmdAdd(t *testing.T) {
 					filepath.Join(home, "missing.txt"),
 				}
 			},
-			wantRels: []string{".zshrc"},
+			wantRels: []string{"dot_zshrc"},
 			hasErr:   true,
 		},
 	}

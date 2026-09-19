@@ -18,29 +18,26 @@ const (
 	update
 )
 
-// roots returns the copy source and destination roots for act.
-func (act action) roots(repo, home string) (src, dst string) {
+func (act action) paths(repo, home, repoRel string) (src, dst string) {
+	repoPath, homePath := filepath.Join(repo, repoRel), filepath.Join(home, decodeRel(repoRel))
 	if act == update {
-		return home, repo
+		return homePath, repoPath
 	}
-	return repo, home
+	return repoPath, homePath
 }
 
-// changedFiles shows the diff of each managed file that act would change
-// and returns their relative paths.
 func changedFiles(repo, home string, act action) ([]string, error) {
 	files, err := managedFiles(repo)
 	if err != nil {
 		return nil, err
 	}
 
-	src, dst := act.roots(repo, home)
 	var changed []string
 	for _, rel := range files {
-		srcPath, dstPath := filepath.Join(src, rel), filepath.Join(dst, rel)
+		srcPath, dstPath := act.paths(repo, home, rel)
 		if act == update {
 			if _, err := os.Stat(srcPath); errors.Is(err, fs.ErrNotExist) {
-				fmt.Println("skip (missing in home):", rel)
+				fmt.Println("skip (missing in home):", decodeRel(rel))
 				continue
 			}
 		}
@@ -76,12 +73,11 @@ func sync(repo, home string, yes bool, stdin io.Reader, act action) error {
 		return nil
 	}
 
-	src, dst := act.roots(repo, home)
 	for _, rel := range changed {
-		if err := copyFile(filepath.Join(src, rel), filepath.Join(dst, rel)); err != nil {
+		if err := copyFile(act.paths(repo, home, rel)); err != nil {
 			return err
 		}
-		fmt.Println("copied", rel)
+		fmt.Println("copied", decodeRel(rel))
 	}
 
 	return nil

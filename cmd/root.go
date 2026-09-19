@@ -13,7 +13,8 @@ var rootCmd = &cobra.Command{
 	Long: `A minimal copy-based dotfiles manager
 
 The repository directory (default ~/dotfiles, override with $DOT_DIR)
-mirrors the structure of $HOME. There is no config file.`,
+mirrors the structure of $HOME, with leading dots renamed to "dot_"
+(e.g. ~/.config/nvim -> dot_config/nvim). There is no config file.`,
 	SilenceUsage:      true,
 	CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
 }

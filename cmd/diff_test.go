@@ -19,21 +19,21 @@ func Test_cmdDiff(t *testing.T) {
 	}{
 		{
 			name:      "succeeds when nothing changed",
-			repoFiles: map[string]string{".zshrc": "same"},
+			repoFiles: map[string]string{"dot_zshrc": "same"},
 			homeFiles: map[string]string{".zshrc": "same"},
 		},
 		{
 			name:      "succeeds when file differs",
-			repoFiles: map[string]string{".zshrc": "new"},
+			repoFiles: map[string]string{"dot_zshrc": "new"},
 			homeFiles: map[string]string{".zshrc": "old"},
 		},
 		{
 			name:      "succeeds when file is missing in home",
-			repoFiles: map[string]string{".config/nvim/init.lua": "lua"},
+			repoFiles: map[string]string{"dot_config/nvim/init.lua": "lua"},
 		},
 		{
 			name:      "ignores files only in home",
-			repoFiles: map[string]string{".zshrc": "same"},
+			repoFiles: map[string]string{"dot_zshrc": "same"},
 			homeFiles: map[string]string{".zshrc": "same", ".bashrc": "bash"},
 		},
 		{
@@ -42,7 +42,7 @@ func Test_cmdDiff(t *testing.T) {
 		},
 		{
 			name:      "fails when home has directory with same name",
-			repoFiles: map[string]string{".config": "x"},
+			repoFiles: map[string]string{"dot_config": "x"},
 			homeFiles: map[string]string{".config/nvim/init.lua": "lua"},
 			hasErr:    true,
 		},
