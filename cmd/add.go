@@ -2,15 +2,14 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 )
 
 var addCmd = &cobra.Command{
-	Use:   "add <file>...",
-	Short: "copy files from $HOME into the repo",
+	Use:   "add <path>...",
+	Short: "copy files or directories from $HOME into the repo",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		repo, home, err := dirs()
@@ -35,21 +34,27 @@ func cmdAdd(repo, home string, paths []string) error {
 		if err != nil || !filepath.IsLocal(rel) {
 			return fmt.Errorf("%s is not under home directory %s", abs, home)
 		}
-		repoRel := encodeRel(rel)
-		if decodeRel(repoRel) != rel {
-			return fmt.Errorf("%s cannot be added: path elements starting with %q are reserved", abs, dotPrefix)
+		if rel == "." {
+			return fmt.Errorf("%s is the home directory itself; add paths under it instead", abs)
 		}
-		info, err := os.Stat(abs)
+		targets, err := collectFiles(abs)
 		if err != nil {
 			return err
 		}
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("%s is not a regular file", abs)
+		for _, target := range targets {
+			rel, err := filepath.Rel(home, target)
+			if err != nil {
+				return err
+			}
+			repoRel := encodeRel(rel)
+			if decodeRel(repoRel) != rel {
+				return fmt.Errorf("%s cannot be added: path elements starting with %q are reserved", target, dotPrefix)
+			}
+			if err := copyFile(target, filepath.Join(repo, repoRel)); err != nil {
+				return err
+			}
+			fmt.Println("added", rel)
 		}
-		if err := copyFile(abs, filepath.Join(repo, repoRel)); err != nil {
-			return err
-		}
-		fmt.Println("added", rel)
 	}
 	return nil
 }

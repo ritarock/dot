@@ -87,6 +87,44 @@ func managedFiles(repo string) ([]string, error) {
 	return files, nil
 }
 
+func collectFiles(root string) ([]string, error) {
+	info, err := os.Stat(root)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("%s is not a regular file", root)
+		}
+		return []string{root}, nil
+	}
+
+	var files []string
+	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if path != root && d.Name() == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !d.Type().IsRegular() {
+			fmt.Println("skip (not a regular file):", path)
+			return nil
+		}
+		files = append(files, path)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	slices.Sort(files)
+
+	return files, nil
+}
+
 func filesDiffer(a, b string) (bool, error) {
 	da, err := os.ReadFile(a)
 	if err != nil {

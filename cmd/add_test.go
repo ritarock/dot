@@ -15,10 +15,12 @@ func Test_cmdAdd(t *testing.T) {
 	const wantPerm = os.FileMode(0o640)
 
 	tests := []struct {
-		name     string
-		setup    func(t *testing.T, home, repo string) []string
-		wantRels []string
-		hasErr   bool
+		name          string
+		setup         func(t *testing.T, home, repo string) []string
+		wantRels      []string
+		wantAbsent    []string
+		wantRepoEmpty bool
+		hasErr        bool
 	}{
 		{
 			name: "adds a file directly under home",
@@ -65,6 +67,65 @@ func Test_cmdAdd(t *testing.T) {
 			wantRels: nil,
 		},
 		{
+			name: "adds every regular file under a directory",
+			setup: func(t *testing.T, home, repo string) []string {
+				dir := filepath.Join(home, ".config", "zsh")
+				writeFile(t, filepath.Join(dir, ".zshrc"), wantContent, wantPerm)
+				writeFile(t, filepath.Join(dir, "alias.zsh"), wantContent, wantPerm)
+				writeFile(t, filepath.Join(dir, "fn", "foo.zsh"), wantContent, wantPerm)
+				return []string{dir}
+			},
+			wantRels: []string{
+				filepath.Join("dot_config", "zsh", "dot_zshrc"),
+				filepath.Join("dot_config", "zsh", "alias.zsh"),
+				filepath.Join("dot_config", "zsh", "fn", "foo.zsh"),
+			},
+		},
+		{
+			name: "skips .git under a directory",
+			setup: func(t *testing.T, home, repo string) []string {
+				dir := filepath.Join(home, ".config", "zsh")
+				writeFile(t, filepath.Join(dir, "alias.zsh"), wantContent, wantPerm)
+				writeFile(t, filepath.Join(dir, ".git", "config"), wantContent, wantPerm)
+				return []string{dir}
+			},
+			wantRels:   []string{filepath.Join("dot_config", "zsh", "alias.zsh")},
+			wantAbsent: []string{filepath.Join("dot_config", "zsh", "dot_git", "config")},
+		},
+		{
+			name: "skips non-regular files under a directory",
+			setup: func(t *testing.T, home, repo string) []string {
+				dir := filepath.Join(home, ".config", "zsh")
+				writeFile(t, filepath.Join(dir, "alias.zsh"), wantContent, wantPerm)
+				require.NoError(t, os.Symlink(filepath.Join(dir, "alias.zsh"), filepath.Join(dir, "link.zsh")))
+				return []string{dir}
+			},
+			wantRels:   []string{filepath.Join("dot_config", "zsh", "alias.zsh")},
+			wantAbsent: []string{filepath.Join("dot_config", "zsh", "link.zsh")},
+		},
+		{
+			name: "adds nothing for an empty directory",
+			setup: func(t *testing.T, home, repo string) []string {
+				dir := filepath.Join(home, ".config", "zsh")
+				require.NoError(t, os.MkdirAll(dir, 0o755))
+				return []string{dir}
+			},
+			wantRepoEmpty: true,
+		},
+		{
+			name: "accepts a directory and a file in one call",
+			setup: func(t *testing.T, home, repo string) []string {
+				dir := filepath.Join(home, ".config", "zsh")
+				writeFile(t, filepath.Join(dir, "alias.zsh"), wantContent, wantPerm)
+				writeFile(t, filepath.Join(home, ".zshrc"), wantContent, wantPerm)
+				return []string{dir, filepath.Join(home, ".zshrc")}
+			},
+			wantRels: []string{
+				filepath.Join("dot_config", "zsh", "alias.zsh"),
+				"dot_zshrc",
+			},
+		},
+		{
 			name: "fails when path is outside home",
 			setup: func(t *testing.T, home, repo string) []string {
 				outside := filepath.Join(t.TempDir(), "outside.txt")
@@ -72,6 +133,15 @@ func Test_cmdAdd(t *testing.T) {
 				return []string{outside}
 			},
 			hasErr: true,
+		},
+		{
+			name: "fails when path is home itself",
+			setup: func(t *testing.T, home, repo string) []string {
+				writeFile(t, filepath.Join(home, ".zshrc"), wantContent, wantPerm)
+				return []string{home}
+			},
+			wantRepoEmpty: true,
+			hasErr:        true,
 		},
 		{
 			name: "fails when path is the parent of home",
@@ -96,10 +166,10 @@ func Test_cmdAdd(t *testing.T) {
 			hasErr: true,
 		},
 		{
-			name: "fails when path is a directory",
+			name: "fails when a file under a directory has element starting with dot_",
 			setup: func(t *testing.T, home, repo string) []string {
-				dir := filepath.Join(home, ".config")
-				require.NoError(t, os.MkdirAll(dir, 0o755))
+				dir := filepath.Join(home, ".config", "zsh")
+				writeFile(t, filepath.Join(dir, "dot_foo"), wantContent, wantPerm)
 				return []string{dir}
 			},
 			hasErr: true,
@@ -136,6 +206,12 @@ func Test_cmdAdd(t *testing.T) {
 
 			for _, rel := range test.wantRels {
 				assertFile(t, filepath.Join(repo, rel), wantContent, wantPerm)
+			}
+			for _, rel := range test.wantAbsent {
+				assert.NoFileExists(t, filepath.Join(repo, rel))
+			}
+			if test.wantRepoEmpty {
+				assert.Empty(t, readFiles(t, repo))
 			}
 		})
 	}
