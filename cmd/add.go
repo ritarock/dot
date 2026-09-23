@@ -50,6 +50,9 @@ func cmdAdd(repo, home string, paths []string) error {
 			if decodeRel(repoRel) != rel {
 				return fmt.Errorf("%s cannot be added: path elements starting with %q are reserved", target, dotPrefix)
 			}
+			if repoRel == runnerFile {
+				return fmt.Errorf("%s cannot be added: %s is reserved for task definitions", target, runnerFile)
+			}
 			if err := copyFile(target, filepath.Join(repo, repoRel)); err != nil {
 				return err
 			}

@@ -74,6 +74,9 @@ func managedFiles(repo string) ([]string, error) {
 		if err != nil {
 			return err
 		}
+		if rel == runnerFile {
+			return nil
+		}
 		files = append(files, rel)
 		return nil
 	})

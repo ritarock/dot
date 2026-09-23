@@ -14,7 +14,9 @@ var rootCmd = &cobra.Command{
 
 The repository directory (default ~/dotfiles, override with $DOT_DIR)
 mirrors the structure of $HOME, with leading dots renamed to "dot_"
-(e.g. ~/.config/nvim -> dot_config/nvim). There is no config file.`,
+(e.g. ~/.config/nvim -> dot_config/nvim). Copying has no configuration;
+the only special file is an optional runner.yaml at the repository root,
+which defines the tasks that "dot run" executes.`,
 	SilenceUsage:      true,
 	CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
 }

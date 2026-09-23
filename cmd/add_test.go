@@ -175,6 +175,15 @@ func Test_cmdAdd(t *testing.T) {
 			hasErr: true,
 		},
 		{
+			name: "fails when path would collide with runner.yaml",
+			setup: func(t *testing.T, home, repo string) []string {
+				writeFile(t, filepath.Join(home, runnerFile), wantContent, wantPerm)
+				return []string{filepath.Join(home, runnerFile)}
+			},
+			wantRepoEmpty: true,
+			hasErr:        true,
+		},
+		{
 			name: "leaves earlier files copied when a later path fails",
 			setup: func(t *testing.T, home, repo string) []string {
 				writeFile(t, filepath.Join(home, ".zshrc"), wantContent, wantPerm)

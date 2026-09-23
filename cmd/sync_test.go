@@ -94,6 +94,15 @@ func Test_sync(t *testing.T) {
 			wantHome:  map[string]string{".zshrc": "new"},
 		},
 		{
+			name:      "apply ignores runner.yaml in repo",
+			act:       apply,
+			repoFiles: map[string]string{"dot_zshrc": "new", runnerFile: "tasks:\n"},
+			homeFiles: map[string]string{".zshrc": "old"},
+			yes:       true,
+			wantRepo:  map[string]string{"dot_zshrc": "new", runnerFile: "tasks:\n"},
+			wantHome:  map[string]string{".zshrc": "new"},
+		},
+		{
 			name:      "update copies changed file to repo without confirmation",
 			act:       update,
 			repoFiles: map[string]string{"dot_zshrc": "old"},

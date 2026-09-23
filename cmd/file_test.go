@@ -143,6 +143,22 @@ func Test_managedFiles(t *testing.T) {
 			want: []string{"dot_zshrc"},
 		},
 		{
+			name: "skips runner.yaml at repo root",
+			setup: func(t *testing.T, dir string) string {
+				writeFiles(t, dir, map[string]string{runnerFile: "x", "dot_zshrc": "x"})
+				return dir
+			},
+			want: []string{"dot_zshrc"},
+		},
+		{
+			name: "does not skip runner.yaml in a subdirectory",
+			setup: func(t *testing.T, dir string) string {
+				writeFiles(t, dir, map[string]string{"dot_config/" + runnerFile: "x", "dot_zshrc": "x"})
+				return dir
+			},
+			want: []string{"dot_config/" + runnerFile, "dot_zshrc"},
+		},
+		{
 			name: "does not skip repo root starting with dot",
 			setup: func(t *testing.T, dir string) string {
 				repo := filepath.Join(dir, ".dotfiles")
